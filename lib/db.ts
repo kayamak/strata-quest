@@ -1,5 +1,6 @@
-import { PrismaClient } from "../app/generated/prisma";
+import { PrismaClient } from "../app/generated/prisma/client";
 import { PrismaD1 } from "@prisma/adapter-d1";
+import type { D1Database } from "@cloudflare/workers-types";
 
 declare global {
   // eslint-disable-next-line no-var
