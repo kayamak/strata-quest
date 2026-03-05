@@ -15,7 +15,8 @@
     "test:coverage": "vitest --coverage",
     "typecheck": "tsc --noEmit",
     "e2e": "playwright test",
-    "e2e:ui": "playwright test --ui"
+    "e2e:ui": "playwright test --ui",
+    "db:seed": "npx tsx prisma/seeds/seed.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",

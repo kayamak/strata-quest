@@ -60,6 +60,7 @@ npm run preview
 | `npm run deploy` | Cloudflare Workers へデプロイ |
 | `npm run typecheck` | TypeScript 型チェック |
 | `npm run lint` | ESLint 実行 |
+| `npm run db:seed` | ローカル DB にシードデータ投入 |
 | `npm run test` | Vitest 単体テスト |
 | `npm run test:ui` | Vitest UI モード |
 | `npm run test:coverage` | カバレッジレポート生成 |
@@ -75,9 +76,14 @@ npm run preview
 # マイグレーション実行
 npx prisma migrate dev
 
+# シードデータ投入（VocabularyNode・Quest・Question など）
+npm run db:seed
+
 # Prisma Studio（GUI）
 npx prisma studio
 ```
+
+> **シードの内容**: `prisma/seeds/seed.ts` を実行します。既存データを全削除した後、英語語彙ノード（32語）とクエスト（13種）を投入します。
 
 ### Cloudflare D1（本番・プレビュー）
 
