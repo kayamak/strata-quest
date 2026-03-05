@@ -34,6 +34,7 @@ import type {
   QuestCompletionResult,
 } from '@/types';
 import { prisma } from '@/lib/prisma';
+import type { AnswerOption } from '@prisma/client';
 
 export async function startPlaySession(
   questId: string
@@ -103,9 +104,11 @@ export async function submitAnswer(
   }
 
   const selectedOption = question.answerOptions.find(
-    (o) => o.id === input.selectedOptionId
+    (o: AnswerOption) => o.id === input.selectedOptionId
   );
-  const correctOption = question.answerOptions.find((o) => o.isCorrect);
+  const correctOption = question.answerOptions.find(
+    (o: AnswerOption) => o.isCorrect
+  );
   if (!correctOption) {
     throw new AppError('No correct option found', 'DATA_ERROR');
   }
