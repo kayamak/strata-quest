@@ -45,16 +45,18 @@ Cloudflare Workers での開発には Hono や itty-router などの軽量フレ
 - shadcn/ui や Tailwind CSS との相性が良く、RPG UI の実装に必要なコンポーネントを素早く揃えられる
 - Vercel 以外でのデプロイ実績が opennextjs により確立されてきており、ベンダーロックインを避けられる
 
-### `export const runtime = "edge"` の全面適用
+### `export const runtime = "edge"` について
 
 **これは Next.js の標準的な使い方ではありません。** 通常、Next.js の Server Components は Node.js ランタイム（`runtime = "nodejs"`）で動作します。
 
-Cloudflare Workers は Node.js ランタイムをサポートしていないため、**すべての `layout.tsx` / `page.tsx` / `route.ts` に `export const runtime = "edge"` を宣言する**必要があります。
+Cloudflare Workers は Node.js ランタイムをサポートしていないため、**`layout.tsx` / `page.tsx` / `route.ts` に `export const runtime = "edge"` を宣言する**ことで、Edge Runtime で動作させる必要があります。
 
 ```ts
-// app/layout.tsx
+// app/layout.tsx 等
 export const runtime = "edge";
 ```
+
+> **注**: 現在のコードベースでは `runtime = "edge"` 宣言はまだ追加されていません。`opennextjs-cloudflare` がビルド時にデフォルトで Edge Runtime として処理するため、ローカル開発（`npm run dev`）時は Node.js ランタイムで動作しています。D1 バインディングを使うページが増えた場合など、明示的に宣言が必要になる場面があります。
 
 `"edge"` ランタイムは Next.js の Web Standards API サブセット（`fetch`, `Request`, `Response`, `crypto` 等）のみを使う軽量モードです。
 Node.js 専用パッケージ（`fs`, `net` 依存のライブラリ等）は使用できないため、依存ライブラリ選定時に常に確認が必要です。
@@ -72,17 +74,33 @@ opennextjs-cloudflare build
 .open-next/worker.js  ← wrangler が Workers にデプロイ
 ```
 
-`open-next.config.ts` の各設定の意味は以下のとおりです。
+`open-next.config.ts` の構成は以下のとおりです。
 
 ```ts
-{
-  wrapper: "cloudflare-node",   // Workers の fetch イベントハンドラとして動作させる
-  converter: "edge",            // Next.js の edge runtime 形式に変換
-  proxyExternalRequest: "fetch", // 外部リクエストを Workers の fetch API 経由に統一
-  incrementalCache: "dummy",    // ISR キャッシュ無効（Workers では使用不可）
-  tagCache: "dummy",            // タグベースキャッシュ無効（同上）
-  queue: "dummy",               // バックグラウンドキュー無効（同上）
-}
+const config: OpenNextConfig = {
+  default: {
+    override: {
+      wrapper: "cloudflare-node",   // Workers の fetch イベントハンドラとして動作させる
+      converter: "edge",            // Next.js の edge runtime 形式に変換
+      proxyExternalRequest: "fetch", // 外部リクエストを Workers の fetch API 経由に統一
+      incrementalCache: "dummy",    // ISR キャッシュ無効（Workers では使用不可）
+      tagCache: "dummy",            // タグベースキャッシュ無効（同上）
+      queue: "dummy",               // バックグラウンドキュー無効（同上）
+    },
+  },
+  edgeExternals: ["node:crypto"],   // crypto モジュールを Workers ネイティブ実装に委譲
+  middleware: {
+    external: true,                  // ミドルウェアを外部 Worker として分離
+    override: {
+      wrapper: "cloudflare-edge",   // Edge ハンドラとして動作させる
+      converter: "edge",
+      proxyExternalRequest: "fetch",
+      incrementalCache: "dummy",
+      tagCache: "dummy",
+      queue: "dummy",
+    },
+  },
+};
 ```
 
 `incrementalCache` / `tagCache` / `queue` を `"dummy"` にしているのは、**Workers 環境では ISR（Incremental Static Regeneration）が動作しないため**です。
@@ -111,19 +129,31 @@ npm run preview
 - SQLite 互換のため Prisma との相性が良い
 - 無料枠（5GB ストレージ、500万行読み取り/日）が個人開発初期に十分
 
+### Prisma 6 の構成
+
+- **バージョン**: `@prisma/client` ^6.19.2 / `prisma` ^6.19.2
+- Prisma Client の出力先を `app/generated/prisma` に指定（`schema.prisma` の `output` 設定）
+- `previewFeatures = ["driverAdapters"]` を有効化し、D1 アダプターを使用可能にしている
+- データソースは SQLite（`provider = "sqlite"`）
+
 ### Prisma の Workers 対応（標準から外れた点）
 
 通常の Prisma は Node.js 前提で、TCP ソケット経由でデータベースに接続します。
-Workers の V8 Isolate 環境では TCP 接続が使えないため、**Prisma D1 アダプター**を経由して D1 の HTTP API を呼び出す構成にしています。
+Workers の V8 Isolate 環境では TCP 接続が使えないため、**Prisma D1 アダプター**（`@prisma/adapter-d1`）を経由して D1 の HTTP API を呼び出す構成にしています。
 
 ```ts
 // lib/db.ts
+import { PrismaClient } from "../app/generated/prisma/client";
 import { PrismaD1 } from "@prisma/adapter-d1";
 
+// Workers 環境用: D1 バインディングを受け取ってクライアントを生成
 export function createPrismaClient(db: D1Database): PrismaClient {
   const adapter = new PrismaD1(db);
   return new PrismaClient({ adapter });
 }
+
+// ローカル開発用: アダプターなしの通常クライアント
+export { prisma };
 ```
 
 `D1Database` は Cloudflare Workers の環境変数（バインディング）として注入されます。
@@ -133,11 +163,11 @@ Server Action や API Route でデータベースを使う場合は、`process.e
 
 | 環境 | DB | 接続方式 |
 |---|---|---|
-| `npm run dev`（Node.js） | ローカル SQLite | Prisma 標準（TCP） |
+| `npm run dev`（Node.js） | ローカル SQLite ファイル | Prisma 標準（ファイルベース） |
 | `npm run preview`（Workers） | ローカル D1 エミュレータ | PrismaD1 アダプター |
 | 本番（Workers） | Cloudflare D1 | PrismaD1 アダプター |
 
-`npm run dev` 時はアダプターなしの通常 Prisma クライアントを使用しているため、`lib/db.ts` では `NODE_ENV` で分岐しています。
+`lib/db.ts` では 2 つのエクスポートを提供しています。Workers 環境では `createPrismaClient(db)` を使い D1 バインディングを渡します。ローカル開発（`npm run dev`）では `prisma`（アダプターなしの通常クライアント）を使い、`process.env.NODE_ENV` による分岐でシングルトン化しています。
 この非対称性により、開発中は高速な HMR が使える一方、D1 固有の挙動（SQL の方言差異など）は `npm run preview` で確認する必要があります。
 
 ---
@@ -214,10 +244,13 @@ Server Action や API Route でデータベースを使う場合は、`process.e
 |---|---|
 | `npm run dev` | 開発サーバー起動（Node.js + Turbopack） |
 | `npm run build` | プロダクションビルド（Next.js） |
-| `npm run cf:build` | Cloudflare 向けビルド（opennextjs） |
-| `npm run preview` | Cloudflare ローカルプレビュー（Workers ランタイム） |
-| `npm run deploy` | Cloudflare Workers へデプロイ |
+| `npm run cf:build` | Cloudflare 向けビルド（`opennextjs-cloudflare build`） |
+| `npm run preview` | Cloudflare ローカルプレビュー（`opennextjs-cloudflare build && wrangler dev`） |
+| `npm run deploy` | Cloudflare Workers へデプロイ（`opennextjs-cloudflare build && wrangler deploy`） |
 | `npm run typecheck` | TypeScript 型チェック（`tsc --noEmit`） |
 | `npm run lint` | ESLint 実行 |
 | `npm run test` | Vitest 単体テスト |
+| `npm run test:ui` | Vitest UI モード |
+| `npm run test:coverage` | Vitest カバレッジ |
 | `npm run e2e` | Playwright E2E テスト |
+| `npm run e2e:ui` | Playwright UI モード |
