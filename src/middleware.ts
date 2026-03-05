@@ -5,7 +5,7 @@ import { authConfig } from '@/lib/auth.config';
 
 const { auth } = NextAuth(authConfig);
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   if (process.env.OAUTH_SKIP === 'true') {
     return NextResponse.next();
   }
