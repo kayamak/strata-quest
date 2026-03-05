@@ -1,0 +1,9 @@
+name = "strata-quest"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+main = ".open-next/worker.js"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "strata-quest-db"
+database_id = "your-database-id-here"
