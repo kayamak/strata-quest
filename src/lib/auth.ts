@@ -4,8 +4,10 @@ import Google from 'next-auth/providers/google';
 import { prisma } from '@/lib/prisma';
 import type { Session } from 'next-auth';
 import type { Prisma } from '@prisma/client';
+import { authConfig } from '@/lib/auth.config';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   adapter: PrismaAdapter(prisma),
   providers: [
     Google({
@@ -13,26 +15,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
   ],
-  session: {
-    strategy: 'jwt',
-  },
-  callbacks: {
-    session({ session, token }) {
-      if (token.sub) {
-        session.user.id = token.sub;
-      }
-      return session;
-    },
-    jwt({ token, user }) {
-      if (user) {
-        token.sub = user.id;
-      }
-      return token;
-    },
-  },
-  pages: {
-    signIn: '/auth/signin',
-  },
 });
 
 const DEV_USER_ID = 'dev-skip-auth';

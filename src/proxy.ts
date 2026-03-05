@@ -1,8 +1,11 @@
-import { auth } from '@/lib/auth';
+import NextAuth from 'next-auth';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { authConfig } from '@/lib/auth.config';
 
-export async function middleware(request: NextRequest) {
+const { auth } = NextAuth(authConfig);
+
+export async function proxy(request: NextRequest) {
   if (process.env.OAUTH_SKIP === 'true') {
     return NextResponse.next();
   }
