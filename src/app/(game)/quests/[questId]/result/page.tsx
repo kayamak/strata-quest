@@ -12,7 +12,7 @@ export default async function QuestResultPage({
   params,
   searchParams,
 }: PageProps) {
-  const { questId } = await params;
+  await params;
   const { session: sessionId } = await searchParams;
 
   const sessionAuth = await getSession();

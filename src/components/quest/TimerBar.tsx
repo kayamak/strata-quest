@@ -14,17 +14,22 @@ export default function TimerBar({
   running,
 }: TimerBarProps) {
   const [remaining, setRemaining] = useState(timeLimitSeconds * 1000);
+  const [prevTimeLimitSeconds, setPrevTimeLimitSeconds] = useState(timeLimitSeconds);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const elapsedRef = useRef(0);
 
-  useEffect(() => {
+  // タイムリミットが変わったらレンダー中にリセット（useEffect内でのsetState回避）
+  if (prevTimeLimitSeconds !== timeLimitSeconds) {
+    setPrevTimeLimitSeconds(timeLimitSeconds);
     setRemaining(timeLimitSeconds * 1000);
-    elapsedRef.current = 0;
-    startTimeRef.current = null;
-  }, [timeLimitSeconds]);
+  }
 
   useEffect(() => {
+    // timeLimitSeconds 変化時 or running 変化時に ref をリセット
+    elapsedRef.current = 0;
+    startTimeRef.current = null;
+
     if (!running) {
       if (intervalRef.current) clearInterval(intervalRef.current);
       return;

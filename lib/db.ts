@@ -3,7 +3,6 @@ import { PrismaD1 } from "@prisma/adapter-d1";
 import type { D1Database } from "@cloudflare/workers-types";
 
 declare global {
-  // eslint-disable-next-line no-var
   var __prisma: PrismaClient | undefined;
 }
 

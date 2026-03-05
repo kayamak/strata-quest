@@ -6,7 +6,7 @@ import type { Session } from 'next-auth';
 import type { Prisma } from '@prisma/client';
 import { authConfig } from '@/lib/auth.config';
 
-const { providers: _providers, ...baseAuthConfig } = authConfig;
+const { providers: _, ...baseAuthConfig } = authConfig;
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...baseAuthConfig,
