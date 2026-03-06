@@ -1,51 +1,59 @@
-import { prisma } from '@/lib/prisma';
+import { eq, and, asc, desc, sql, lte } from 'drizzle-orm';
+import { getDb } from '@/lib/get-db';
+import {
+  quests,
+  questions,
+  answerOptions,
+  playSessions,
+  questionAnswers,
+} from '@/db/schema';
 import type { Quest, Question, AnswerOption, PlaySession } from '@/types';
 import { SessionStatus } from '@/types';
 
 type QuestionWithOptions = Question & { answerOptions: AnswerOption[] };
-
 type QuestWithQuestions = Quest & { questions: QuestionWithOptions[] };
 
 export async function findAvailableQuests(
   playerLevel: number
 ): Promise<Quest[]> {
-  const quests = await prisma.quest.findMany({
-    where: {
-      isActive: true,
-      requiredLevel: { lte: playerLevel },
-    },
-    orderBy: [{ requiredLevel: 'asc' }, { difficulty: 'asc' }],
+  const db = await getDb();
+  const result = await db.query.quests.findMany({
+    where: and(
+      eq(quests.isActive, true),
+      lte(quests.requiredLevel, playerLevel)
+    ),
+    orderBy: [asc(quests.requiredLevel), asc(quests.difficulty)],
   });
-  return quests as Quest[];
+  return result as Quest[];
 }
 
 export async function findAllActiveQuests(): Promise<Quest[]> {
-  const quests = await prisma.quest.findMany({
-    where: {
-      isActive: true,
-    },
-    orderBy: [{ requiredLevel: 'asc' }, { difficulty: 'asc' }],
+  const db = await getDb();
+  const result = await db.query.quests.findMany({
+    where: eq(quests.isActive, true),
+    orderBy: [asc(quests.requiredLevel), asc(quests.difficulty)],
   });
-  return quests as Quest[];
+  return result as Quest[];
 }
 
 export async function findQuestById(
   questId: string
 ): Promise<QuestWithQuestions | null> {
-  const quest = await prisma.quest.findUnique({
-    where: { id: questId },
-    include: {
+  const db = await getDb();
+  const quest = await db.query.quests.findFirst({
+    where: eq(quests.id, questId),
+    with: {
       questions: {
-        orderBy: { sortOrder: 'asc' },
-        include: {
+        orderBy: [asc(questions.sortOrder)],
+        with: {
           answerOptions: {
-            orderBy: { sortOrder: 'asc' },
+            orderBy: [asc(answerOptions.sortOrder)],
           },
         },
       },
     },
   });
-  return quest as QuestWithQuestions | null;
+  return (quest as QuestWithQuestions) ?? null;
 }
 
 export async function createPlaySession(params: {
@@ -53,24 +61,27 @@ export async function createPlaySession(params: {
   questId: string;
   totalQuestions: number;
 }): Promise<PlaySession> {
-  const session = await prisma.playSession.create({
-    data: {
+  const db = await getDb();
+  const [session] = await db
+    .insert(playSessions)
+    .values({
       userId: params.userId,
       questId: params.questId,
       status: SessionStatus.IN_PROGRESS,
       totalQuestions: params.totalQuestions,
-    },
-  });
+    })
+    .returning();
   return session as PlaySession;
 }
 
 export async function findPlaySession(
   sessionId: string
 ): Promise<PlaySession | null> {
-  const session = await prisma.playSession.findUnique({
-    where: { id: sessionId },
+  const db = await getDb();
+  const session = await db.query.playSessions.findFirst({
+    where: eq(playSessions.id, sessionId),
   });
-  return session as PlaySession | null;
+  return (session as PlaySession) ?? null;
 }
 
 export async function recordQuestionAnswer(params: {
@@ -82,25 +93,29 @@ export async function recordQuestionAnswer(params: {
   responseTimeMs: number;
   comboCountAtAnswer: number;
 }): Promise<void> {
-  await prisma.$transaction([
-    prisma.questionAnswer.create({
-      data: {
-        playSessionId: params.playSessionId,
-        questionId: params.questionId,
-        selectedOptionId: params.selectedOptionId,
-        isCorrect: params.isCorrect,
-        xpEarned: params.xpEarned,
-        responseTimeMs: params.responseTimeMs,
-        comboCountAtAnswer: params.comboCountAtAnswer,
-      },
+  const db = await getDb();
+
+  // D1 の batch API を Drizzle 経由で利用
+  await db.batch([
+    db.insert(questionAnswers).values({
+      playSessionId: params.playSessionId,
+      questionId: params.questionId,
+      selectedOptionId: params.selectedOptionId,
+      isCorrect: params.isCorrect,
+      xpEarned: params.xpEarned,
+      responseTimeMs: params.responseTimeMs,
+      comboCountAtAnswer: params.comboCountAtAnswer,
     }),
-    prisma.playSession.update({
-      where: { id: params.playSessionId },
-      data: {
-        totalXpEarned: { increment: params.xpEarned },
-        correctAnswers: params.isCorrect ? { increment: 1 } : undefined,
-      },
-    }),
+    db
+      .update(playSessions)
+      .set({
+        totalXpEarned: sql`${playSessions.totalXpEarned} + ${params.xpEarned}`,
+        ...(params.isCorrect
+          ? { correctAnswers: sql`${playSessions.correctAnswers} + 1` }
+          : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(playSessions.id, params.playSessionId)),
   ]);
 }
 
@@ -108,43 +123,52 @@ export async function updateSessionMaxCombo(
   sessionId: string,
   combo: number
 ): Promise<void> {
-  const session = await prisma.playSession.findUnique({
-    where: { id: sessionId },
-    select: { maxCombo: true },
+  const db = await getDb();
+  const session = await db.query.playSessions.findFirst({
+    where: eq(playSessions.id, sessionId),
+    columns: { maxCombo: true },
   });
   if (session && combo > session.maxCombo) {
-    await prisma.playSession.update({
-      where: { id: sessionId },
-      data: { maxCombo: combo },
-    });
+    await db
+      .update(playSessions)
+      .set({ maxCombo: combo, updatedAt: new Date() })
+      .where(eq(playSessions.id, sessionId));
   }
 }
 
 export async function completePlaySession(
   sessionId: string
 ): Promise<PlaySession> {
-  const session = await prisma.playSession.update({
-    where: { id: sessionId },
-    data: {
+  const db = await getDb();
+  const [session] = await db
+    .update(playSessions)
+    .set({
       status: SessionStatus.COMPLETED,
       completedAt: new Date(),
-    },
-  });
+      updatedAt: new Date(),
+    })
+    .where(eq(playSessions.id, sessionId))
+    .returning();
   return session as PlaySession;
 }
 
 export async function getAnswerCount(sessionId: string): Promise<number> {
-  return prisma.questionAnswer.count({
-    where: { playSessionId: sessionId },
-  });
+  const db = await getDb();
+  const result = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(questionAnswers)
+    .where(eq(questionAnswers.playSessionId, sessionId));
+  return result[0]?.count ?? 0;
 }
 
 export async function getCurrentCombo(sessionId: string): Promise<number> {
-  const answers = await prisma.questionAnswer.findMany({
-    where: { playSessionId: sessionId },
-    orderBy: { createdAt: 'desc' },
-    select: { isCorrect: true },
-  });
+  const db = await getDb();
+  const answers = await db
+    .select({ isCorrect: questionAnswers.isCorrect })
+    .from(questionAnswers)
+    .where(eq(questionAnswers.playSessionId, sessionId))
+    .orderBy(desc(questionAnswers.createdAt));
+
   let combo = 0;
   for (const a of answers) {
     if (!a.isCorrect) break;

@@ -1,27 +1,35 @@
-import { prisma } from '@/lib/prisma';
+import { eq, and, gte, desc } from 'drizzle-orm';
+import { getDb } from '@/lib/get-db';
+import { playerProfiles, playSessions, quests } from '@/db/schema';
 import type { PlayerProfile, PlayHistoryItem } from '@/types';
 
 export async function findOrCreatePlayerProfile(
   userId: string
 ): Promise<PlayerProfile> {
-  const existing = await prisma.playerProfile.findUnique({
-    where: { userId },
+  const db = await getDb();
+  const existing = await db.query.playerProfiles.findFirst({
+    where: eq(playerProfiles.userId, userId),
   });
   if (existing) return existing as PlayerProfile;
 
-  const created = await prisma.playerProfile.create({
-    data: { userId },
-  });
+  const [created] = await db.insert(playerProfiles)
+    .values({ userId })
+    .onConflictDoUpdate({
+      target: playerProfiles.userId,
+      set: { userId }
+    })
+    .returning();
   return created as PlayerProfile;
 }
 
 export async function findPlayerProfile(
   userId: string
 ): Promise<PlayerProfile | null> {
-  const profile = await prisma.playerProfile.findUnique({
-    where: { userId },
+  const db = await getDb();
+  const profile = await db.query.playerProfiles.findFirst({
+    where: eq(playerProfiles.userId, userId),
   });
-  return profile as PlayerProfile | null;
+  return (profile as PlayerProfile) ?? null;
 }
 
 export async function updatePlayerXpAndLevel(params: {
@@ -29,14 +37,22 @@ export async function updatePlayerXpAndLevel(params: {
   addXp: number;
   newLevel: number;
 }): Promise<PlayerProfile> {
-  const profile = await prisma.playerProfile.update({
-    where: { userId: params.userId },
-    data: {
-      totalXp: { increment: params.addXp },
-      level: params.newLevel,
-    },
+  const db = await getDb();
+  const current = await db.query.playerProfiles.findFirst({
+    where: eq(playerProfiles.userId, params.userId),
   });
-  return profile as PlayerProfile;
+  if (!current) throw new Error('Player profile not found');
+
+  const [updated] = await db
+    .update(playerProfiles)
+    .set({
+      totalXp: current.totalXp + params.addXp,
+      level: params.newLevel,
+      updatedAt: new Date(),
+    })
+    .where(eq(playerProfiles.userId, params.userId))
+    .returning();
+  return updated as PlayerProfile;
 }
 
 export async function updatePlayerStats(params: {
@@ -46,34 +62,42 @@ export async function updatePlayerStats(params: {
   structureSense: number;
   vocabularyLevel: number;
 }): Promise<void> {
-  await prisma.playerProfile.update({
-    where: { userId: params.userId },
-    data: {
-      abstractPower: { increment: params.abstractPower },
-      specificPower: { increment: params.specificPower },
-      structureSense: { increment: params.structureSense },
-      vocabularyLevel: { increment: params.vocabularyLevel },
-    },
+  const db = await getDb();
+  const current = await db.query.playerProfiles.findFirst({
+    where: eq(playerProfiles.userId, params.userId),
   });
+  if (!current) throw new Error('Player profile not found');
+
+  await db
+    .update(playerProfiles)
+    .set({
+      abstractPower: current.abstractPower + params.abstractPower,
+      specificPower: current.specificPower + params.specificPower,
+      structureSense: current.structureSense + params.structureSense,
+      vocabularyLevel: current.vocabularyLevel + params.vocabularyLevel,
+      updatedAt: new Date(),
+    })
+    .where(eq(playerProfiles.userId, params.userId));
 }
 
 export async function findPlayHistory(
   userId: string
 ): Promise<PlayHistoryItem[]> {
+  const db = await getDb();
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-  const sessions = await prisma.playSession.findMany({
-    where: {
-      userId,
-      startedAt: { gte: sevenDaysAgo },
-      status: 'COMPLETED',
+  const sessions = await db.query.playSessions.findMany({
+    where: and(
+      eq(playSessions.userId, userId),
+      gte(playSessions.startedAt, sevenDaysAgo),
+      eq(playSessions.status, 'COMPLETED')
+    ),
+    with: {
+      quest: { columns: { title: true } },
     },
-    include: {
-      quest: { select: { title: true } },
-    },
-    orderBy: { startedAt: 'desc' },
-    take: 20,
+    orderBy: [desc(playSessions.startedAt)],
+    limit: 20,
   });
 
   return sessions.map((s) => ({

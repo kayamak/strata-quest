@@ -1,16 +1,13 @@
 import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import { prisma } from '@/lib/prisma';
 import VocabularyTree from '@/components/vocabulary/VocabularyTree';
-import { getUnlockedVocabularyIds } from '@/lib/db/vocabulary';
+import { getUnlockedVocabularyIds, findVocabularyTree } from '@/lib/db/vocabulary';
 
 export default async function VocabularyPage() {
   const sessionAuth = await getSession();
   if (!sessionAuth?.user?.id) redirect('/auth/signin');
 
-  const nodes = await prisma.vocabularyNode.findMany({
-    orderBy: [{ abstractionLevel: 'desc' }, { word: 'asc' }],
-  });
+  const nodes = await findVocabularyTree();
 
   const unlockedIds = await getUnlockedVocabularyIds(sessionAuth.user.id);
 

@@ -1,22 +1,26 @@
 import NextAuth from 'next-auth';
-import { PrismaAdapter } from '@auth/prisma-adapter';
 import Google from 'next-auth/providers/google';
-import { prisma } from '@/lib/prisma';
+import { DrizzleAdapter } from '@auth/drizzle-adapter';
+import { getDb } from '@/lib/get-db';
 import type { Session } from 'next-auth';
-import type { Prisma } from '@prisma/client';
 import { authConfig } from '@/lib/auth.config';
+import { users } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 
 const { providers: _, ...baseAuthConfig } = authConfig;
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  ...baseAuthConfig,
-  adapter: PrismaAdapter(prisma),
-  providers: [
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
-  ],
+export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
+  const db = await getDb();
+  return {
+    ...baseAuthConfig,
+    adapter: DrizzleAdapter(db),
+    providers: [
+      Google({
+        clientId: process.env.GOOGLE_CLIENT_ID!,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      }),
+    ],
+  };
 });
 
 const DEV_USER_ID = 'dev-skip-auth';
@@ -32,16 +36,16 @@ const devSession: Session = {
 };
 
 async function ensureDevUser(): Promise<void> {
-  const data: Prisma.UserCreateInput = {
-    id: DEV_USER_ID,
-    email: 'dev@example.com',
-    name: 'Dev User',
-  };
-  await prisma.user.upsert({
-    where: { id: DEV_USER_ID },
-    update: {},
-    create: data,
-  });
+  const db = await getDb();
+  try {
+    await db.insert(users).values({
+      id: DEV_USER_ID,
+      email: 'dev@example.com',
+      name: 'Dev User',
+    }).onConflictDoNothing();
+  } catch (err) {
+    // Ignore race condition errors
+  }
 }
 
 export async function getSession(): Promise<Session | null> {

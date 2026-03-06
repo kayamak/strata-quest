@@ -1,5 +1,7 @@
 import Link from 'next/link';
-import { prisma } from '@/lib/prisma';
+import { getDb } from '@/lib/get-db';
+import { eq } from 'drizzle-orm';
+import { playSessions } from '@/db/schema';
 import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 
@@ -22,9 +24,10 @@ export default async function QuestResultPage({
     redirect(`/quests`);
   }
 
-  const playSession = await prisma.playSession.findUnique({
-    where: { id: sessionId },
-    include: { quest: true },
+  const db = await getDb();
+  const playSession = await db.query.playSessions.findFirst({
+    where: eq(playSessions.id, sessionId),
+    with: { quest: true },
   });
 
   if (!playSession || playSession.userId !== sessionAuth.user.id) {

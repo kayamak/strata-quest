@@ -2,6 +2,9 @@
 
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
+import { getDb } from '@/lib/get-db';
+import { eq } from 'drizzle-orm';
+import { questions as questionsTable } from '@/db/schema';
 import {
   findQuestById,
   createPlaySession,
@@ -33,8 +36,6 @@ import type {
   CompleteQuestInput,
   QuestCompletionResult,
 } from '@/types';
-import { prisma } from '@/lib/prisma';
-import type { AnswerOption } from '@prisma/client';
 
 export async function startPlaySession(
   questId: string
@@ -90,13 +91,16 @@ export async function submitAnswer(
     throw new AppError('Session is not in progress', 'SESSION_INVALID');
   }
 
-  // 選択肢と問題の情報を取得
-  const question = await prisma.question.findUnique({
-    where: { id: input.questionId },
-    include: {
+  // 選択肢と問題の情報を取得（Drizzle relational query）
+  const db = await getDb();
+  const question = await db.query.questions.findFirst({
+    where: eq(questionsTable.id, input.questionId),
+    with: {
       answerOptions: true,
       targetVocabulary: true,
-      quest: { select: { baseXpReward: true, questType: true } },
+      quest: {
+        columns: { baseXpReward: true, questType: true },
+      },
     },
   });
   if (!question) {
@@ -104,11 +108,9 @@ export async function submitAnswer(
   }
 
   const selectedOption = question.answerOptions.find(
-    (o: AnswerOption) => o.id === input.selectedOptionId
+    (o) => o.id === input.selectedOptionId
   );
-  const correctOption = question.answerOptions.find(
-    (o: AnswerOption) => o.isCorrect
-  );
+  const correctOption = question.answerOptions.find((o) => o.isCorrect);
   if (!correctOption) {
     throw new AppError('No correct option found', 'DATA_ERROR');
   }
