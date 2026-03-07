@@ -34,20 +34,28 @@ npx prisma generate
 
 ## 開発
 
+### `npm run dev` — 通常の開発時
+
 ```bash
-# Next.js 開発サーバー（HMR あり、Node.js ランタイム）
 npm run dev
 ```
 
-`http://localhost:3000` で確認できます。
+- `next dev` を起動（Node.js ランタイム、Turbopack）
+- `http://localhost:3000` で確認できます
+- HMR（ホットリロード）が有効で即時反映される
+- D1 へのアクセスは `@opennextjs/cloudflare` が wrangler の `getPlatformProxy` 経由で透過的に処理するため、通常の開発作業はこちらで完結する
 
-> **注意**: `npm run dev` は Node.js ランタイムで動作するため、Cloudflare Workers 固有の挙動は再現しません。
-> Workers ランタイムに近い動作確認は `npm run preview` を使用してください。
+### `npm run preview` — 本番前の最終確認時
 
 ```bash
-# Cloudflare Workers ランタイムでのローカルプレビュー
 npm run preview
 ```
+
+- Cloudflare Workers 向けにビルドしたうえで `wrangler dev` を起動
+- 本番と同じ Workers ランタイム（V8 Isolate）でローカル動作を確認できる
+- Node.js 固有の API が使えないなど、Cloudflare Workers の制約を再現する
+- 「`dev` では動くのに本番で動かない」問題の切り分けに使用する
+- ビルドを伴うため起動が遅く、HMR も効かない
 
 ## コマンド一覧
 
