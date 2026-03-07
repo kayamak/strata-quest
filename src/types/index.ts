@@ -137,6 +137,8 @@ export type StartPlaySessionInput = {
 export type StartPlaySessionResult = {
   playSessionId: string;
   questions: (Question & { answerOptions: AnswerOption[] })[];
+  playerXp: number;
+  playerLevel: number;
 };
 
 export type CompleteQuestInput = {

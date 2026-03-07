@@ -68,6 +68,8 @@ export async function startPlaySession(
   return {
     playSessionId: playSession.id,
     questions: quest.questions,
+    playerXp: profile.totalXp,
+    playerLevel: profile.level,
   };
 }
 

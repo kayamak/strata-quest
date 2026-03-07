@@ -7,13 +7,16 @@ type PageProps = {
 
 export default async function QuestPlayPage({ params }: PageProps) {
   const { questId } = await params;
-  const { playSessionId, questions } = await startPlaySession(questId);
+  const { playSessionId, questions, playerXp, playerLevel } =
+    await startPlaySession(questId);
 
   return (
     <PlayQuestClient
       playSessionId={playSessionId}
       questId={questId}
       questions={questions}
+      playerXp={playerXp}
+      playerLevel={playerLevel}
     />
   );
 }
