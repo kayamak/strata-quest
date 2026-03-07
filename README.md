@@ -99,6 +99,26 @@ npx wrangler d1 migrations apply strata-quest-db
 npx wrangler d1 migrations apply strata-quest-db --local
 ```
 
+## ログ確認
+
+### Cloudflare Workers のリアルタイムログ
+
+```bash
+# リアルタイムでログをストリーミング（本番）
+npx wrangler tail strata-quest
+
+# JSON 形式で出力
+npx wrangler tail strata-quest --format json
+
+# ステータスコードでフィルタ（例: 500 エラーのみ）
+npx wrangler tail strata-quest --status error
+
+# 特定のサンプリングレートでフィルタ（0.0〜1.0）
+npx wrangler tail strata-quest --sampling-rate 1.0
+```
+
+> `Ctrl+C` で停止します。ログは直近のリクエストに対してのみ表示されます（過去ログの永続保存は非対応）。
+
 ## デプロイ
 
 | 項目 | 値 |

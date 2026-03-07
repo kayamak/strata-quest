@@ -32,6 +32,7 @@ export type PlayerProfile = {
   specificPower: number;
   structureSense: number;
   vocabularyLevel: number;
+  currentHp: number;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -139,6 +140,7 @@ export type StartPlaySessionResult = {
   questions: (Question & { answerOptions: AnswerOption[] })[];
   playerXp: number;
   playerLevel: number;
+  playerHp: number;
 };
 
 export type CompleteQuestInput = {
@@ -192,6 +194,12 @@ export type StatDelta = {
 export type XpForLevel = {
   current: number;
   required: number;
+};
+
+export type ReviveResult = {
+  newXp: number;
+  newLevel: number;
+  newHp: number;
 };
 
 // カスタムエラークラス

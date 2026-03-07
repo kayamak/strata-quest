@@ -55,6 +55,36 @@ export async function updatePlayerXpAndLevel(params: {
   return updated as PlayerProfile;
 }
 
+export async function updatePlayerHp(params: {
+  userId: string;
+  currentHp: number;
+}): Promise<void> {
+  const db = await getDb();
+  await db
+    .update(playerProfiles)
+    .set({ currentHp: params.currentHp, updatedAt: new Date() })
+    .where(eq(playerProfiles.userId, params.userId));
+}
+
+export async function setPlayerXpAndLevel(params: {
+  userId: string;
+  newXp: number;
+  newLevel: number;
+}): Promise<PlayerProfile> {
+  const db = await getDb();
+  const [updated] = await db
+    .update(playerProfiles)
+    .set({
+      totalXp: params.newXp,
+      level: params.newLevel,
+      updatedAt: new Date(),
+    })
+    .where(eq(playerProfiles.userId, params.userId))
+    .returning();
+  if (!updated) throw new Error('Player profile not found');
+  return updated as PlayerProfile;
+}
+
 export async function updatePlayerStats(params: {
   userId: string;
   abstractPower: number;

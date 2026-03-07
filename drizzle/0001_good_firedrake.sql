@@ -1,0 +1,1 @@
+ALTER TABLE `PlayerProfile` ADD `currentHp` integer DEFAULT 100 NOT NULL;

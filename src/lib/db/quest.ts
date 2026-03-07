@@ -152,6 +152,14 @@ export async function completePlaySession(
   return session as PlaySession;
 }
 
+export async function abandonPlaySession(sessionId: string): Promise<void> {
+  const db = await getDb();
+  await db
+    .update(playSessions)
+    .set({ status: SessionStatus.ABANDONED, updatedAt: new Date() })
+    .where(eq(playSessions.id, sessionId));
+}
+
 export async function getAnswerCount(sessionId: string): Promise<number> {
   const db = await getDb();
   const result = await db

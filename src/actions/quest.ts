@@ -12,6 +12,7 @@ import {
   recordQuestionAnswer,
   updateSessionMaxCombo,
   completePlaySession,
+  abandonPlaySession,
   getCurrentCombo,
   getAnswerCount,
 } from '@/lib/db/quest';
@@ -70,6 +71,7 @@ export async function startPlaySession(
     questions: quest.questions,
     playerXp: profile.totalXp,
     playerLevel: profile.level,
+    playerHp: profile.currentHp,
   };
 }
 
@@ -160,6 +162,23 @@ export async function submitAnswer(
     explanation: question.explanation,
     currentCombo: newCombo,
   };
+}
+
+export async function abandonQuest(input: {
+  playSessionId: string;
+}): Promise<void> {
+  const session = await getSession();
+  if (!session?.user?.id) {
+    redirect('/auth/signin');
+  }
+  const userId = session.user.id;
+
+  const playSession = await findPlaySession(input.playSessionId);
+  if (!playSession || playSession.userId !== userId) {
+    throw new AppError('Unauthorized', 'UNAUTHORIZED');
+  }
+
+  await abandonPlaySession(input.playSessionId);
 }
 
 export async function completeQuest(

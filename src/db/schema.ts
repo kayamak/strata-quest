@@ -90,6 +90,7 @@ export const playerProfiles = sqliteTable('PlayerProfile', {
   specificPower: integer('specificPower').notNull().default(0),
   structureSense: integer('structureSense').notNull().default(0),
   vocabularyLevel: integer('vocabularyLevel').notNull().default(0),
+  currentHp: integer('currentHp').notNull().default(100),
   createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer('updatedAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 }, (table) => [
